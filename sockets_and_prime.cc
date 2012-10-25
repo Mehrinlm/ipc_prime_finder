@@ -15,15 +15,17 @@
 #define BACKLOG 2 /* Number of allowed connections */
 
 using namespace std;
-vector<int> calc_primes(vector<int> primes);
+vector<int> calc_primes(vector<int> primes, int start);
 int getConnectionClient(char* ipAddress);
-void send(int socket, vector<int> primes);
+void send2(int socket, vector<int> primes);
 int getConnectionServer();
 vector<int> recive(int socket);
+void printOut(char* type, vector<int> primes);
+int isNotDone(vector<int> primes, int start);
 
 int main(int argc, char *argv[]){
   int socket;
-  int waiting;
+  int start = 1;
 
 	cout << "Is this server? (y or n): ";
   char server;
@@ -33,7 +35,6 @@ int main(int argc, char *argv[]){
   
   if (server == 'y' || server == 'Y') {
     socket = getConnectionServer();
-    waiting = 1;
   } else if (server == 'n' || server == 'N'){
     char ipAddress[12];
     cout << "Enter IP address: ";
@@ -43,7 +44,7 @@ int main(int argc, char *argv[]){
     cout << "Min number: ";
     int min;
     cin >> min;
-    cout << "Min number: ";
+    cout << "Max number: ";
     int max;
     cin >> max;
     
@@ -51,37 +52,64 @@ int main(int argc, char *argv[]){
     for (int i = min; i < max; i++){
       primes.push_back(i);
     }
-    waiting = 0;
+    printf("Made Primes\n");
+    start = 0;
+    primes = calc_primes(primes, start);
+    printf("Calced Primes\n");
+    send2(socket, primes);
+    printf("sent Primes\n");
   } else {
     printf("Incorrect input!\n");
     exit(-1);
   }
-	
-  while (true){
-    if (waiting){
-      waiting = 0;
-      
-      
-      
-    } else {
-      waiting = 1;
-      
-      
-    }
+printf("About to go in loop\n");
+  while (isNotDone(primes, start)){
+    //start += 2;
+    printf("in loop\n");
+    primes = recive(socket);
+    primes = calc_primes(primes, start);
+    send2(socket, primes);
+    
   }
-  
+  printf("donehere\n");
 }
 
+/**
+ *  Prints out what was just passed in in correc format
+ */
+void printOut(char* type, vector<int> primes){
+  char first10[11];
+  char second10[11];
+  
+  for (int i = 0; i < 10 && i < primes.size(); i++){
+    first10[i] = primes[i];
+  }
+  
+  for (int i = (primes.size()-11); i < primes.size() && i > 0; i++){
+    second10[i] = primes[i];
+  }
+  first10[10] = '\0';
+  second10[10] = '\0';
+  cout << type << ": " << first10 << " . . . " << second10 << endl;
+}
 
+/**
+ * Calculates if all primes are done, if so returns false
+ * 
+ */
+int isNotDone(vector<int> primes, int start){
+  if (start == 0) return 1;
+  return ((primes.size()-1) == start);
+}
 
 /** 
  *	Does one iteration and returns all the values remaining in 
  *	the range that have not been ruled out.
  */
-vector<int> calc_primes(vector<int> primes) {
+vector<int> calc_primes(vector<int> primes, int start) {
 
 	//get the value
-	int v = primes[0];
+	int v = primes[start];
 
 	if (v!=0) {
 			//remove all multiples of the value
@@ -104,20 +132,20 @@ int getConnectionClient(char* ipAddress){
   return socket(AF_INET, SOCK_STREAM, 0);
 }
 
-void send(int socket, vector<int> primes){
+void send2(int socket, vector<int> primes){
   int bufLocation = 0;
   int size = primes.size();
   char buf[size]; /* buf will stores received text */
-  
+  printf("Send Primes\n");
   for (int i = 0; i < size; i++){
     if (primes[i] != 0){
       buf[bufLocation++] = (char)primes[i];
     }
   }
   buf[bufLocation] = '\0';
-  
-  send(socket, buf, bufLocation, 0);
-  
+  printf("Sendiont Primes\n");
+  send(socket, buf, bufLocation, MSG_NOSIGNAL);
+  printf("Sendt Primes\n");
   
   
 /* 
@@ -136,8 +164,9 @@ void send(int socket, vector<int> primes){
 }
 
 vector<int> recive(int socket){
-  char buf[100];
-  int numOfBits = recv(socket, buf, 100, 0);
+  char buf[MAXDATASIZE];
+  int numOfBits;
+  while ((numOfBits = recv(socket, buf, MAXDATASIZE, 0)) == -1); //Keep reading until something comes through
   
   vector<int> primes;
   
@@ -174,6 +203,6 @@ int getConnectionServer(){
       printf("accept() error\n");
       exit(-1);
     }
-    
+    printf("connection name");
     return fd2;
 }
