@@ -1,0 +1,240 @@
+NOTES ON SOCKETS
+----------------------------------------------------------
+
+/*
+ * struct addr_info want ai_family to be AF_UNSPEC, AF_INET, AF_INET6
+ *
+ * sock_addr and sock_addr_in can be cast in either direction
+ *
+ * 
+ *
+ * struct addrinfo {
+ *  int ai_flags; // AI_PASSIVE, AI_CANNONNAME
+ *  int ai_family;    // AF_INET, AF_INET6, AF_UNSPEC
+ *  int ai_socktype;  // SOCK_STREAM, SOCK_DGRAM
+ *  size_t      ai_addrlen;   // size of ai_addr in bytes
+ * }
+ *
+ * int getaddrinfo(const char * node // "www.example.com" or IP addr
+ *                const char * service // http or port #
+ *                const struct addrinfo *hints, // struct addrinfo filled out with relevant info
+ *                struct addrinfo **res); // res is returned point to a linked list
+ *
+ * example call -- in this case, a server wanting to listen on own machine port 3490
+ *
+ * int status
+ * struct addrinfo hints;
+ * struct addrinfo *servinfo // will point to result linked list
+ *
+ * memset(&hints, 0, sizeof(hints));    // ensure the struct is empty
+ * hints.ai_family = AF_UNSPEC;         // use either !Pv4 or IPv6
+ * hints.ai_socktype = SOCK_STREAM;     // use TCP
+ * hints.ai_flags = AI_PASSIVE;         // tells getaddrinfo() to set address of local host to the socket structure
+ *
+ * if ((status = getaddrinfo(NULL, "3490", &hints, &serverinfo)) != 0) {
+ *  fprint(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+ *  exit(1);
+ * }
+ *
+ * ------------------
+ *
+ * freeaddrinfo(servinfo);              // frees the linked list
+ *
+ * --------------------
+ * 
+ * socket() returns a file descriptor to use in later syscalls, or -1 on error and sets errno to the error's value
+ * -------------------------------------------
+ * bind() -ing to a socket is done by the server, not the host
+ * int bind(int sockfd, struct sockaddr *myaddr, int addrlen);
+ *
+ * example listening on port 3490
+ * --------------------------------------
+ * // load up structs with getadderinfo()
+ *
+ * memset(&hints, 0, sizeof(hints);
+ * hints.ai (set all as above)
+ *
+ * getaddrinfo(NULL, "3490", &hints, $res);
+ *
+ * //make a socket
+ * sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+ *
+ * //bind it to the port
+ * bind(sockfd, res->ai_addr, res->ai_addrlen);
+ *
+ * // since using AI_PASSIVE flag in the hints addrinfo object, binding to the local IP
+ *
+ * ---------------------------------------
+ *
+ * bind() returns -1 on err and set errno to the error's value
+ *
+ * ----------------------------------------------------------------------
+ *
+ * connect(int sockfd, struct sockaddr *serv_addr, int addrlen);
+ *
+ * example - connect to www.example.com, port 3490
+ * -------------------------------------------------------------------
+ * struct addrinfo hints, *res;
+ * int sockfd;
+ *
+ * // first load up address structs with getaddrinfo();
+ *
+ * memset(&hints, 0, sizeof(hints);
+ * hints.ai_family = AF_UNSPEC;
+ * hints.ai_socktype = SOCK_STREAM;
+ *
+ * getaddrinfo("www.example.com", "3490", &hints, &res);
+ *
+ * // make a socket
+ *
+ * sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+ *
+ * // connect
+ *
+ * connect(sockfd, res->ai_addr, res->ai_addrlen);
+ * -----------------------------------------------------------
+ * connect() returns -1 on error and sets errno
+ * when the client, don't call bind, and the kernel will choose a port for us to use
+ *
+ * so far, 
+ *
+ * SERVER - init addrinfo, getaddrinfo(), socket(), bind()
+ * CLIENT - init addrinfo, getaddrinfo(), socket(), connect()
+ *
+ * ------------------------------------------------------------------
+ * listen() - listen for incoming connections to handle
+ *
+ * int listen(int sockfd, int backlog);
+ *
+ * sockfd is the same socket file desc
+ * backlog is the number of connections allowed on the incoming queue
+ *  requested connections wait in this queue until you accept() them and backlog is limit
+ *  most systems silently limit this to around 20, 5 or 10 is likely fine
+ *
+ * listen() returns -1 on failure, and sets errno
+ *
+ * so if listening on a port (SERVER) call:
+ * getaddrinfo()
+ * socket()
+ * bind ()
+ * listen();
+ * 
+ * // then accept() calls
+ *
+ * -----------------------------------------------------------------
+ * int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+ *  
+ *  sockfd is listening socket file desc
+ *  addr will usually be a pointer to a local struct sockaddr_storage (info about incoming conn)
+ *  addrlen is a local integer variable that should be set to sizeof(struct sockaddr_storage) before passed to accept()
+ *
+ *  accept() will not put more than that many bytes into addr
+ *
+ * When accept() is called, it returns a NEW SOCKET FILE DESCRIPTOR to use for this particular
+ * request.  The original file descriptor continues to listen for requests that are pooled up
+ * in the connection queue.  This new file descriptor is the one to send() and recv() on.
+ *
+ * accept() returns -1 on failure and sets errno
+ *
+ * example of server listening on port 3490 with accept()
+ * ----------------------------------------------------------------
+ * #include <string.h>
+ * #include <sys/types.h>
+ * #include <sys/socket.h>
+ * #include <netinet/in.h>
+ *
+ * #define PORT "3490"      // the port clients will connect to
+ * #define BACKLOG 10       // how many pending connections queue will hold
+ *
+ * int main(void) {
+ *  struct sockaddr_storage their_addr;
+ *  socklen_t addr_size;
+ *  struct addrinfo hints;              // info about address of machine that hosts the desired socket
+ *  struct addrinfo *res;               // the result linked list of machines found that match hint description
+ *  int sockfd, new_fd;
+ *
+ *  // need error checking on following calls!!!
+ *
+ *  // first, load up address structs with getaddrinfo()
+ *  memset(&hints, 0, sizeof(hints));
+ *  hints.ai_family = AF_UNSPEC;        // use IPv4 or IPv6
+ *  hints.ai_socktype = SOCK_STREAM;    // use TCP
+ *  hints.ai_flags = AI_PASSIVE;        // getaddrinfo() will fill in local IP
+ *
+ *  getaddrinfo(NULL, PORT, &hints, &res);
+ *
+ *  // make a socket, bind it, and listen
+ *
+ *  sockfd = socket(res->ai_family, res->socktype, res->ai_protocol);
+ *  bind(sockfd, res->ai_addr, res->ai_addrlen);
+ *  listen(sockfd, BACKLOG);
+ *
+ *  // accept an incoming connection
+ *
+ *  addr_size = sizeof(their_addr);
+ *  new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &addr_size);
+ *
+ *  // ready to communicate on socket descriptor new_fd!!!!
+ *  .
+ *  .
+ *  .
+ * }
+ *
+ * ---------------------------------------------------------------------------
+ * send()
+ *
+ * int send(int sockfd, const void *msg, int len, int flags);
+ *
+ *  sockfd is the socket descriptor you want to send data to:
+ *    CLIENT: the socket fd returned by socket()
+ *    SERVER: the socket fd returned by accept()
+ *  msg is a pointer to the data to send
+ *  flags - he says, just set 'em to zero, but checkout man pages if curious
+ *
+ *  example usage:
+ *  -----------------------------------
+ *  char *msg = "Beej was here!";
+ *  int len, bytes_sent;
+ *  .
+ *  .
+ *  len = strlen(msg);
+ *  bytes_sent = send(sockfd, msg, len, 0);
+ *
+ *  -------------------------------------
+ *  send() returns the number of bytes actually sent out - this might be less than the number
+ *    you specified that it should send out!!!!
+ *
+ *    sometimes you'll tell it to send info, and it can't handle it all, 
+ *      will send as much as it can, and trust us to send the rest later.
+ *    so, if the value returned by send() doesn't match the value in len, we have to send the rest
+ *
+ *    on error, send() returns -1 and errno is set to the error number
+ *
+ * -------------------------------------------------------------------------------
+ * recv()
+ * 
+ * int recv(int sockfd, void *buf, int len, int flags);
+ *
+ *   sockfd is the socket desc to read from
+ *   buf is the buffer to place information in
+ *   len is the maximum length of the buffer
+ *   flags - can just be set to zero
+ *
+ * returns the number of bytes read into the buffer, or -1 on error (sets errno)
+ *  recv() can return 0, this means one thing, the remote side has closed the connection to you
+ *
+ * --------------------------------------------------------------------------------
+ * close()    // prevents any more reads and writes to the socket, either end.
+ *
+ * close(sockfd);
+ * --------------------------------------------------------------------------------
+ * shutdown() // a little more control, allows cutting off communication in a certain direction
+ * 
+ * int shutdown(int sockfd, int how);
+ * 
+ *   how 0: receives are disallowed, 1: sends are disallowed, 2 sands are receives are disallowed
+ *
+ * shutdown() returns 0 on success, -1 or error and sets errno
+ *
+ * shutdown() doesn't actually close the file descriptor, so, close() must be called to free it
+ */
