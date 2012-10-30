@@ -21,11 +21,7 @@
 #define PORT "9328"                                       // the port to bind() / connect() to
 #define MAX_IN_LISTEN_QUEUE 10                            // the number of pending connections the server can hold
 #define MAX_DATA_SIZE 100                                 // restrict to 100 or less bytes per send
-#define ACK '~'                                           // acknowledgement that communication is done
 
-#define DEBUG 0
-#define INTEGRATED 0
-#define BASE 0
 
 using namespace std;
 
@@ -178,7 +174,7 @@ void remove_multiples(int *primes, int *base, int *max, int *removed, int *remov
 /**
  * receives the array of removed items from the socket file descriptor
  */
-void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *base, int *primes_len, int max) {
+void receive_removed(int socket_fd, int *removed, int *primes, int *base, int *primes_len, int max) {
   char data_length_buffer[sizeof(int) * 2];
 
   if ((recv(socket_fd, data_length_buffer, sizeof(int) * 2, 0)) == -1) {
@@ -224,8 +220,6 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
   *primes_len -= array_length;
   char type[] = "Recv";
   printOut(type, removed, array_length, array_length);
-
-
   
 }
 
@@ -320,13 +314,6 @@ int main(int argc, char *argv[]) {
       break;
     }
 
-      //int child_pid;
-      //if ((child_pid == fork()) == 0) {
-
-        // ---- CHILD PROCESS BEGIN ----//
-
-        //close(socket_listen_fd);                          // close child listening file descriptor
-
         // receive starting max value
         char *max_buf = (char *) calloc(2 * sizeof(int), sizeof(char));
         if (recv(socket_connection_fd, max_buf, 2 * sizeof(int), 0) == -1) {
@@ -359,15 +346,12 @@ int main(int argc, char *argv[]) {
         int *count_removed = (int *) calloc(1, sizeof(int));
         int *removed = (int *) calloc((*max + 1), sizeof(int));
 
-        char *ack = (char *) calloc(1, sizeof(char));
 
         // ---- START LOOPING BEHAVIOR NOW ---- //
           while((*base) * (*base) < *max)  {
 
             remove_multiples(primes, base, max, removed, count_removed);
             primes_len -= *count_removed;
-
-
 
             (*base)++;
             while (*base < *max && primes[*base] == 0) {
@@ -379,42 +363,20 @@ int main(int argc, char *argv[]) {
               perror("server: send_all()");
             }
             
-            receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len, *max);
-
+            receive_removed(socket_connection_fd, removed, primes, base, &primes_len, *max);
 
           }
         char type[] = "FINAL: ";
 
         printOut(type, primes, *max, primes_len);
 
-        /*
-        // wait to close the file descriptor until we have acknowledgement that the client is done
-        memset(ack, 0, sizeof(char));
-        while (ack[0] != ACK) {
 
-          if (recv(socket_connection_fd, ack, sizeof(char), 0) == -1) {
-              perror("server: recv() ACK");
-              exit(1);
-          }
-        }
-        */
 
         close(socket_connection_fd);                      // close as request has been handled
-        //return 0;                                         // terminate child process
-/*
-        // ---- CHILD PROCESS END ----//
-      } else {
-        if (DEBUG) {
-          printf("parent process?");
-        }
-        int status;
-        waitpid(child_pid, &status, 0);
-      }
-      */
+
     free(max_buf);
     free(max);
     free(primes);
-    free(ack);
     free(base);
     
     free(removed);
@@ -445,15 +407,19 @@ int main(int argc, char *argv[]) {
 
     // get destination server
     // TODO: might have to change this char array thing
-    char host[100];
-    cout << "Enter host:\n";
-    cin >> host;
+    while(1){
+      char host[100];
+      cout << "Enter host:\n";
+      cin >> host;
 
-    // populate server info linked list from criteria
-    if ((status = getaddrinfo(host, PORT, &server_criteria, &server_info)) != 0) {
-      fprintf(stderr, "client: getaddrinfo(): %s\n", gai_strerror(status));
-      return 1;
+      // populate server info linked list from criteria
+      if ((status = getaddrinfo(host, PORT, &server_criteria, &server_info)) != 0) {
+        printf("Host not found, please try again.\n");
+        continue;
+      }
+      break;
     }
+
 
     // connect() to the first socket possible
     for (server_info_iter = server_info; server_info_iter != NULL; server_info_iter = server_info_iter->ai_next) {
@@ -486,13 +452,15 @@ int main(int argc, char *argv[]) {
     string input = ""; 
     int *max = (int *) malloc(sizeof(int));
     while (input[0] != EOF) {
-      cout << "Enter the upper bound: ";
+      cout << "\rEnter the upper bound: ";
       getline(cin, input);
       stringstream ss(input);
       if (ss >> *max) {
         break;
       }
-      cout << "Not a valid number. Try again.\n";
+      if (input != "") {
+        cout << "Not a valid number. Try again.\n";
+      } 
     }
 
     int *primes = (int *) calloc((*max + 1), sizeof(int));
@@ -504,7 +472,6 @@ int main(int argc, char *argv[]) {
     }
     primes[1] = 0;                                        // one is not prime and also divides everything evenly
 
-    char *ack = (char *) calloc(1, sizeof(char));
     int *base = (int *) calloc(1, sizeof(int));
     *base = 2;
     int *net_info = (int *) calloc(2, sizeof(int));
@@ -523,15 +490,14 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-
+      //Loop until base > sqrt(last number)
+      //Entering send and recieve loop
       while((*base) * (*base) < *max) {
 
-        receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
-
+        receive_removed(socket_fd, removed, primes, base, &primes_len, *max);
 
         remove_multiples(primes, base, max, removed, count_removed);
         primes_len -= *count_removed;
-
 
         (*base)++;
         while (*base < *max && primes[*base] == 0) {
@@ -551,10 +517,8 @@ int main(int argc, char *argv[]) {
 
     free(max);
     free(primes);
-    free(ack);
     free(base);
     free(removed);
-    //free(net_info); //This free causes core dump
     free(info_buf);
     free(count_removed);
     return 0;
@@ -564,30 +528,4 @@ int main(int argc, char *argv[]) {
 }
 
 
-
-
-// ----------- ORPHANED CODE ----------- //
-    /*
-      receive_removed(socket_fd, int_list, primes, ack, base);
-    while(*base < max) {
-      remove_multiples(primes, base, &max, removed, count_removed);
-
-
-      send_all(socket_fd, removed, *count_removed, base);
-      receive_removed(socket_fd, int_list, primes, ack, base);
-    }
-
-
-    printf("Pos\tListItem");
-    for (int i = 0; i < max; i++) {
-      printf("%d\t%d\n", i, primes[i]);
-    }
-
-    // wait for a listening acknowledgement from server
-    while (ack[0] != ACK) {
-      if (recv(socket_fd, ack, sizeof(char), 0) == -1) {
-          perror("client: recv() ACK");
-          exit(1);
-      }
-    }
-    */
+    
