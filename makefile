@@ -1,8 +1,12 @@
-shiva: transport.cc
-	g++ transport.cc -o shiva -lnsl -lsocket -lresolv
+UNAME := $(shell uname)
 
-things: transport.cc
-	g++ transport.cc -o things
+all: prime_finder.cc
+ifeq ($(UNAME), Linux)
+	g++ prime_finder.cc -o things
+endif
+ifeq ($(UNAME), SunOS)
+	g++ prime_finder.cc -o shiva -lnsl -lsocket -lresolv
+endif
 
 clean:
 	rm -f things shiva
