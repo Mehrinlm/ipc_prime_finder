@@ -104,7 +104,7 @@ int send_all(int socket_connection_fd, int *removed, int count_removed, int *bas
   }
 
   // cast to chars to send
-  char *data = (char *)calloc(sizeof(int) * count_removed, 1);
+  char *data;
   data = (char *)&(remove_buf[0]);
 
   int data_length = sizeof(int) * count_removed;
@@ -186,7 +186,7 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
       exit(1);
   }
 
-  int *int_list = (int *)malloc(sizeof(int) *2);
+  int *int_list;
   int_list = (int *)data_length_buffer;
 
 
@@ -211,19 +211,20 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
     bytes_remaining -= bytes_this_message;
 
   }
-
+  
   // populate removed array and update primes list
-  removed = (int *)byte_data;
+  
+  int *tempholder = (int *)byte_data;
   for (int i = 0; i < array_length; i++) {
-    removed[i] = ntohl(removed[i]);
+    removed[i] = ntohl(tempholder[i]);
     primes[removed[i]] = 0;
   }
-
+  free(tempholder);
   // update global primes_len
   *primes_len -= array_length;
-  char type[] = "Result";
+  char type[] = "Recv";
   printOut(type, removed, array_length, array_length);
-  //free(int_list); //Cuases core dump
+
 
   
 }
@@ -334,7 +335,7 @@ int main(int argc, char *argv[]) {
         }
 
         // cast incoming data to an int
-        int *int_buf = (int *)malloc(sizeof(int) * 2);
+        int *int_buf;
         int_buf = (int *)max_buf;
 
         // convert and assign max value
@@ -377,7 +378,7 @@ int main(int argc, char *argv[]) {
             if ((send_all(socket_connection_fd, removed, *count_removed, base)) == -1) {
               perror("server: send_all()");
             }
-
+            
             receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len, *max);
 
 
@@ -540,6 +541,7 @@ int main(int argc, char *argv[]) {
         if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
           perror("server: send_all()");
         }
+        
       }
 
       char type[] = "FINAL: ";
@@ -551,10 +553,9 @@ int main(int argc, char *argv[]) {
     free(primes);
     free(ack);
     free(base);
-    
+    free(removed);
     //free(net_info); //This free causes core dump
     free(info_buf);
-    free(removed);
     free(count_removed);
     return 0;
 
