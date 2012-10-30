@@ -342,6 +342,9 @@ int main(int argc, char *argv[]) {
         perror("server: accept()");
         continue;
       }
+      
+      break;
+    }
 
       //int child_pid;
       //if ((child_pid == fork()) == 0) {
@@ -385,10 +388,6 @@ int main(int argc, char *argv[]) {
         char *ack = (char *) calloc(1, sizeof(char));
 
         // ---- START LOOPING BEHAVIOR NOW ---- //
-
-        if (INTEGRATED) {
-          calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len);
-        } else {
           while((*base) * (*base) < *max)  {
 
             remove_multiples(primes, base, max, removed, count_removed);
@@ -410,7 +409,9 @@ int main(int argc, char *argv[]) {
 
 
           }
-        }
+        char type[] = "FINAL: ";
+
+        printOut(type, primes, *max, primes_len);
 
         /*
         // wait to close the file descriptor until we have acknowledgement that the client is done
@@ -436,7 +437,7 @@ int main(int argc, char *argv[]) {
         waitpid(child_pid, &status, 0);
       }
       */
-    }
+    
 
     return 0;
 
