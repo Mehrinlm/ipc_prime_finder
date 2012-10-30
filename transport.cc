@@ -335,7 +335,7 @@ int main(int argc, char *argv[]) {
     if (sigaction(SIGCHLD, &sa, NULL) == -1) {
       perror("server: sigaction() failed to set SIGCHLD handler");
     }
-
+  
     // accept() connections loop
     while (1) {
       sin_size = sizeof(client_addr);
@@ -392,7 +392,7 @@ int main(int argc, char *argv[]) {
         if (INTEGRATED) {
           calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len);
         } else {
-          while(*base < *max)  {
+          while((*base) * (*base) < *max)  {
 
             remove_multiples(primes, base, max, removed, count_removed);
             primes_len -= *count_removed;
@@ -548,7 +548,7 @@ int main(int argc, char *argv[]) {
       receive_removed(socket_fd, int_list, primes, ack, base, &primes_len, *max);
       calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len);
     } else {
-      while(*base < *max) {
+      while((*base) * (*base) < *max) {
 
         receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
 
