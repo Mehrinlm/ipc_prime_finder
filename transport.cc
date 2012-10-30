@@ -235,18 +235,33 @@ void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
         int *max, int *count_removed, int *primes_len) {
 
   while((*base) * (*base) < *max)  {
-    remove_multiples(primes, base, max, removed, count_removed);
 
-    // send response to client
+    remove_multiples(primes, base, max, removed, count_removed);
+    primes_len -= *count_removed;
+
+    (*base)++;
+    while ((*base) * (*base) < *max && primes[*base] == 0) {
+      (*base)++;
+    }
+
+    if (!((*base) * (*base) < *max)) {
+
+      // send response to peer
+      if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
+        perror("server: send_all()");
+      }
+      
+      break;
+    }
+
+    // send response to peer
     if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
       perror("server: send_all()");
     }
-      
+
     receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max); 
 
   }
-  free(removed);
-  free(base);
 }
 
 int main(int argc, char *argv[]) {
@@ -344,12 +359,15 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
+      break;
+    }
+
       //int child_pid;
       //if ((child_pid == fork()) == 0) {
 
         // ---- CHILD PROCESS BEGIN ----//
 
-        //close(socket_listen_fd);                          // close child listening file descriptor
+        close(socket_listen_fd);                          // close child listening file descriptor
 
         // receive starting max value
         char *max_buf = (char *) calloc(2 * sizeof(int), sizeof(char));
@@ -385,33 +403,14 @@ int main(int argc, char *argv[]) {
 
         char *ack = (char *) calloc(1, sizeof(char));
 
-        // ---- START LOOPING BEHAVIOR NOW ---- //
 
-        if (INTEGRATED) {
-          calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len);
-        } else {
-          while((*base) * (*base) < *max)  {
+        // main send / receive calculation loop
+        calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len);
 
-            remove_multiples(primes, base, max, removed, count_removed);
-            primes_len -= *count_removed;
+        char type[] = "FINAL: ";
 
+        printOut(type, primes, *max, primes_len);
 
-
-            (*base)++;
-            while (*base < *max && primes[*base] == 0) {
-              (*base)++;
-            }
-
-            // send response to client
-            if ((send_all(socket_connection_fd, removed, *count_removed, base)) == -1) {
-              perror("server: send_all()");
-            }
-
-            receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len, *max);
-
-
-          }
-        }
 
         /*
         // wait to close the file descriptor until we have acknowledgement that the client is done
@@ -426,6 +425,7 @@ int main(int argc, char *argv[]) {
         */
 
         close(socket_connection_fd);                      // close as request has been handled
+
         //return 0;                                         // terminate child process
 /*
         // ---- CHILD PROCESS END ----//
@@ -437,7 +437,8 @@ int main(int argc, char *argv[]) {
         waitpid(child_pid, &status, 0);
       }
       */
-    }
+    //}
+    //
 
     return 0;
 
@@ -542,33 +543,13 @@ int main(int argc, char *argv[]) {
     }
 
 
-    if (INTEGRATED) {
-      receive_removed(socket_fd, int_list, primes, ack, base, &primes_len, *max);
-      calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len);
-    } else {
-      while((*base) * (*base) < *max) {
+    // enter main send / receive calculation loop
+    receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
+    calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len);
 
-        receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
+    char type[] = "FINAL: ";
 
-
-        remove_multiples(primes, base, max, removed, count_removed);
-        primes_len -= *count_removed;
-
-
-        (*base)++;
-        while (*base < *max && primes[*base] == 0) {
-          (*base)++;
-        }
-
-        if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
-          perror("server: send_all()");
-        }
-      }
-
-      char type[] = "FINAL: ";
-
-      printOut(type, primes, *max, primes_len);
-    }
+    printOut(type, primes, *max, primes_len);
 
     free(max);
     free(primes);
