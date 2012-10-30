@@ -34,59 +34,14 @@ void reap_all_dead_child_processes(int signal) {
   while (waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-int send_all(int socket_connection_fd, int *removed, int count_removed, int *base) {
-
-  int i;
-  int *remove_buf = (int *) malloc(sizeof(int) * count_removed);
-
-  for (i = 0; i < count_removed; i++) {
-    remove_buf[i] = htonl(removed[i]);
-  }
-
-  // cast to chars to send
-  char *data = (char *)calloc(sizeof(int) * count_removed, 1);
-  data = (char *)&(remove_buf[0]);
-
-  int data_length = sizeof(int) * count_removed;
-
-  int *net_info = (int *) calloc (2, sizeof(int));
-  int next_base = *base;
-  net_info[0] = htonl(data_length);
-  net_info[1] = htonl(next_base);
-  char *array_length = (char *)net_info;
-
-  // send info to client about data being sent
-  if(send(socket_connection_fd, array_length, sizeof(int) * 2, 0) == -1) {
-    perror("server: send()");
-    close(socket_connection_fd);
-    exit(1);
-  }
-
-  int bytes_sent = 0;
-  int bytes_remaining = data_length;
-  int bytes_this_message;
-
-  while (bytes_sent < data_length) {
-
-    // try to send all bytes
-    if((bytes_this_message = send(socket_connection_fd, data + bytes_sent, data_length, 0)) == -1) {
-      perror("server: send()");
-      break;
-    }
-
-    bytes_sent += bytes_this_message;
-    bytes_remaining -= bytes_this_message;
-  }
-
-  // mirror the functionality of send, return -1 on failure, the total sent bytes on success
-  return bytes_this_message == -1 ? bytes_this_message : bytes_sent;
-}
-
 /**
  *  Prints out what was just passed in in correc format
  */
 void printOut(char* type, int *primes, int max, int primes_len){
-
+  if (max == 0){
+    printf("%s: No primes deleted\n", type);
+    return;
+  }
   int *first_primes;
   int *last_primes;
   int half_primes_len = primes_len / 2;
@@ -139,6 +94,57 @@ void printOut(char* type, int *primes, int max, int primes_len){
   free(last_primes);
 }
 
+int send_all(int socket_connection_fd, int *removed, int count_removed, int *base) {
+  char type[] = "Send";
+  printOut(type, removed, count_removed, count_removed);
+  int i;
+  int *remove_buf = (int *) malloc(sizeof(int) * count_removed);
+
+  for (i = 0; i < count_removed; i++) {
+    remove_buf[i] = htonl(removed[i]);
+  }
+
+  // cast to chars to send
+  char *data = (char *)calloc(sizeof(int) * count_removed, 1);
+  data = (char *)&(remove_buf[0]);
+
+  int data_length = sizeof(int) * count_removed;
+
+  int *net_info = (int *) calloc (2, sizeof(int));
+  int next_base = *base;
+  net_info[0] = htonl(data_length);
+  net_info[1] = htonl(next_base);
+  char *array_length = (char *)net_info;
+
+  // send info to client about data being sent
+  if(send(socket_connection_fd, array_length, sizeof(int) * 2, 0) == -1) {
+    perror("server: send()");
+    close(socket_connection_fd);
+    exit(1);
+  }
+
+  int bytes_sent = 0;
+  int bytes_remaining = data_length;
+  int bytes_this_message;
+
+  while (bytes_sent < data_length) {
+
+    // try to send all bytes
+    if((bytes_this_message = send(socket_connection_fd, data + bytes_sent, data_length, 0)) == -1) {
+      perror("server: send()");
+      break;
+    }
+
+    bytes_sent += bytes_this_message;
+    bytes_remaining -= bytes_this_message;
+  }
+
+  // mirror the functionality of send, return -1 on failure, the total sent bytes on success
+  return bytes_this_message == -1 ? bytes_this_message : bytes_sent;
+}
+
+
+
 /**
  * Calculates if all primes are done, if so returns false
  * 
@@ -182,7 +188,7 @@ void remove_multiples(int *primes, int *base, int *max, int *removed, int *remov
 /**
  * receives the array of removed items from the socket file descriptor
  */
-void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *base, int *primes_len) {
+void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *base, int *primes_len, int max) {
   char data_length_buffer[sizeof(int) * 2];
 
   if ((recv(socket_fd, data_length_buffer, sizeof(int) * 2, 0)) == -1) {
@@ -225,6 +231,8 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
 
   // update global primes_len
   *primes_len -= array_length;
+  char type[] = "Result";
+  printOut(type, removed, array_length, array_length);
 }
 
 void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
@@ -237,8 +245,8 @@ void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
     if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
       perror("server: send_all()");
     }
-
-    receive_removed(socket_fd, removed, primes, ack, base, primes_len); 
+      
+    receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max); 
 
   }
 }
@@ -389,13 +397,7 @@ int main(int argc, char *argv[]) {
             remove_multiples(primes, base, max, removed, count_removed);
             primes_len -= *count_removed;
 
-            printf("\n\nafter remove_mults: primes_len : %d\n", primes_len);
-            printf("REMAINING PRIMES:\n-----------------\n");
-            for (int i = 0; i < *max; i++) {
-              if (primes[i] != 0) {
-                printf("%d, ", primes[i]);
-              }
-            }
+
 
             (*base)++;
             while (*base < *max && primes[*base] == 0) {
@@ -407,15 +409,9 @@ int main(int argc, char *argv[]) {
               perror("server: send_all()");
             }
 
-            receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len);
+            receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len, *max);
 
-            printf("\n\nafter receive: primes_len : %d\n", primes_len);
-            printf("REMAINING PRIMES:\n-----------------\n");
-            for (int i = 0; i < *max; i++) {
-              if (primes[i] != 0) {
-                printf("%d, ", primes[i]);
-              }
-            }
+
           }
         }
 
@@ -549,31 +545,17 @@ int main(int argc, char *argv[]) {
 
 
     if (INTEGRATED) {
-      receive_removed(socket_fd, int_list, primes, ack, base, &primes_len);
+      receive_removed(socket_fd, int_list, primes, ack, base, &primes_len, *max);
       calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len);
     } else {
       while(*base < *max) {
 
-        receive_removed(socket_fd, removed, primes, ack, base, &primes_len);
+        receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
 
-        printf("\n\nafter receive: primes_len : %d\n", primes_len);
-        printf("REMAINING PRIMES:\n-----------------\n");
-        for (int i = 0; i < *max; i++) {
-          if (primes[i] != 0) {
-            printf("%d, ", primes[i]);
-          }
-        }
 
         remove_multiples(primes, base, max, removed, count_removed);
         primes_len -= *count_removed;
 
-        printf("\n\nafter remove_mults: primes_len : %d\n", primes_len);
-        printf("REMAINING PRIMES:\n-----------------\n");
-        for (int i = 0; i < *max; i++) {
-          if (primes[i] != 0) {
-            printf("%d, ", primes[i]);
-          }
-        }
 
         (*base)++;
         while (*base < *max && primes[*base] == 0) {
@@ -585,8 +567,8 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      char type[] = "client: ";
-      printf("primes_len: %d\n", primes_len);
+      char type[] = "FINAL: ";
+
       printOut(type, primes, *max, primes_len);
     }
 
