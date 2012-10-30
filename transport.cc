@@ -1,4 +1,3 @@
-
 /*
  * transport.cc -- client or server to communicate
  */
@@ -227,34 +226,26 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
 
   // update global primes_len
   *primes_len -= array_length;
-  char type[] = "Recv";
+  char type[] = "Result";
   printOut(type, removed, array_length, array_length);
 }
 
 void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
-        int *max, int *count_removed, int *primes_len, int isServer) {
+        int *max, int *count_removed, int *primes_len) {
 
   while((*base) * (*base) < *max)  {
-  
-        if (isServer) receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max);
+    remove_multiples(primes, base, max, removed, count_removed);
 
+    // send response to client
+    if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
+      perror("server: send_all()");
+    }
+      
+    receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max); 
 
-        remove_multiples(primes, base, max, removed, count_removed);
-        primes_len -= *count_removed;
-
-
-        (*base)++;
-        while (*base < *max && primes[*base] == 0) {
-          (*base)++;
-        }
-
-        if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
-          perror("server: send_all()");
-        }
-        
-        if (!isServer) receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max);
   }
-
+  free(removed);
+  free(base);
 }
 
 int main(int argc, char *argv[]) {
@@ -352,9 +343,6 @@ int main(int argc, char *argv[]) {
         continue;
       }
 
-      break;
-    }
-
       //int child_pid;
       //if ((child_pid == fork()) == 0) {
 
@@ -398,12 +386,31 @@ int main(int argc, char *argv[]) {
 
         // ---- START LOOPING BEHAVIOR NOW ---- //
 
-        
-        calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len, 1);
-        
-        char type[] = "FINAL: ";
+        if (INTEGRATED) {
+          calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len);
+        } else {
+          while((*base) * (*base) < *max)  {
 
-        printOut(type, primes, *max, primes_len);
+            remove_multiples(primes, base, max, removed, count_removed);
+            primes_len -= *count_removed;
+
+
+
+            (*base)++;
+            while (*base < *max && primes[*base] == 0) {
+              (*base)++;
+            }
+
+            // send response to client
+            if ((send_all(socket_connection_fd, removed, *count_removed, base)) == -1) {
+              perror("server: send_all()");
+            }
+
+            receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len, *max);
+
+
+          }
+        }
 
         /*
         // wait to close the file descriptor until we have acknowledgement that the client is done
@@ -429,7 +436,7 @@ int main(int argc, char *argv[]) {
         waitpid(child_pid, &status, 0);
       }
       */
-    
+    }
 
     return 0;
 
@@ -533,14 +540,34 @@ int main(int argc, char *argv[]) {
       exit(1);
     }
 
-    //receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
-    calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len, 0);
 
-    
+    if (INTEGRATED) {
+      receive_removed(socket_fd, int_list, primes, ack, base, &primes_len, *max);
+      calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len);
+    } else {
+      while((*base) * (*base) < *max) {
+
+        receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
+
+
+        remove_multiples(primes, base, max, removed, count_removed);
+        primes_len -= *count_removed;
+
+
+        (*base)++;
+        while (*base < *max && primes[*base] == 0) {
+          (*base)++;
+        }
+
+        if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
+          perror("server: send_all()");
+        }
+      }
+
       char type[] = "FINAL: ";
 
       printOut(type, primes, *max, primes_len);
-    
+    }
 
     free(max);
     free(primes);
