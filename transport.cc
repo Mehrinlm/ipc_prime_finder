@@ -37,16 +37,6 @@ void reap_all_dead_child_processes(int signal) {
 int send_all(int socket_connection_fd, int *removed, int count_removed, int *base) {
 
   int i;
-  if (DEBUG) {
-    printf("\nin send_all() (before htonl)\n\nValues are:");
-    for (i = 0; i < count_removed; i++) {
-      printf("%d ", removed[i]);
-    }
-  }
-
-  if (DEBUG) {
-    printf("Sending removed number count rmd: %d\n", count_removed);
-  }
   int *remove_buf = (int *) malloc(sizeof(int) * count_removed);
 
   for (i = 0; i < count_removed; i++) {
@@ -58,11 +48,6 @@ int send_all(int socket_connection_fd, int *removed, int count_removed, int *bas
   data = (char *)&(remove_buf[0]);
 
   int data_length = sizeof(int) * count_removed;
-
-  if (DEBUG) {
-    printf("Sending: data_len: %d\n", data_length);
-    printf("Sendinf: base(drf): %d\n", *base);
-  }
 
   int *net_info = (int *) calloc (2, sizeof(int));
   int next_base = *base;
@@ -122,7 +107,7 @@ void printOut(char* type, int *primes, int max, int primes_len){
   last_primes = (int *) calloc (last_primes_len, sizeof(int));
   
   int pos = 0;
-  for (int i = 0; pos < first_primes_len && i < half_primes_len; i++){
+  for (int i = 0; pos < first_primes_len && i < max; i++){
     if (primes[i] != 0) {
       first_primes[pos] = primes[i];
       pos++;
@@ -130,7 +115,7 @@ void printOut(char* type, int *primes, int max, int primes_len){
   }
   
   pos = last_primes_len - 1;
-  for (int i = primes_len; pos > -1 && i >= half_primes_len; i--){
+  for (int i = max; pos > -1 && i > -1; i--){
     if (primes[i] != 0) {
       last_primes[pos] = primes[i];
       pos--;
@@ -139,18 +124,16 @@ void printOut(char* type, int *primes, int max, int primes_len){
 
   printf("%s: ", type);
   int num_printed = 0;
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < first_primes_len; i++) {
     if (first_primes[i] != 0) {
       printf(" %d,", first_primes[i]);
     }
   }
   printf(" . . .");
-  for (int i = 0; i < 9; i++) {
-    if (last_primes[i] != 0) {
-      printf(" %d,", last_primes[i]);
-    }
+  for (int i = 0; i < last_primes_len - 1; i++) {
+    printf(" %d,", last_primes[i]);
   }
-  printf(" %d\n", last_primes[9]);
+  printf(" %d\n", last_primes[last_primes_len - 1]);
 
   free(first_primes);
   free(last_primes);
@@ -170,19 +153,6 @@ int isNotDone(vector<int> primes, int start){
  *	the range that have not been ruled out.
  */
 void remove_multiples(int *primes, int *base, int *max, int *removed, int *removed_count) {
-  if (DEBUG) {
-    printf("max = %d\n", *max);
-    printf("base = %d\n", *base);
-    printf("cnt rmd = %d\n", *removed_count);
-    printf("Pos\tRemoved");
-    for (int i = 0; i < *removed_count; i++) {
-      printf("%d\t%d\n", i, removed[i]);
-    }
-    printf("Pos\tListItem");
-    for (int i = 0; i < *max; i++) {
-      printf("%d\t%d\n", i, primes[i]);
-    }
-  }
 
   int localBase = *base;
   int localMax = *max;
@@ -205,14 +175,6 @@ void remove_multiples(int *primes, int *base, int *max, int *removed, int *remov
 
     x = x + localBase;
   }
-  
-  if (DEBUG) {
-    for (int i = 0; i < *removed_count; i++) {
-      printf("removed[%d]: %d\n\n\n:", removed[i]);
-    }
-  }
-
-  printf("in remove multiples: removed_count: %d\n", *removed_count);
 
 	return;
 }
@@ -235,9 +197,6 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
   int data_length = ntohl(int_list[0]);
   *base = ntohl(int_list[1]);
 
-  printf("Received: data_length: %d\n", data_length);
-  printf("base = %d\n", *base);
-
   int bytes_received = 0;
   int bytes_remaining = data_length;
   int bytes_this_message;
@@ -257,38 +216,15 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
 
   }
 
+  // populate removed array and update primes list
   removed = (int *)byte_data;
   for (int i = 0; i < array_length; i++) {
     removed[i] = ntohl(removed[i]);
     primes[removed[i]] = 0;
   }
 
-  printf("Pos\tRemoved\n");
-  for (int i = 0; i < array_length; i++) {
-    printf("%d\t%d\n", i, removed[i]);
-  }
-
-  printf("array_length: %d\n", array_length);
+  // update global primes_len
   *primes_len -= array_length;
-  printf("primes_len: %d\n", *primes_len);
-}
-
-void print_status(int *max, int *base, int *count_removed, int *removed, int * primes) {
-  if (DEBUG) {
-    printf("max = %d\n", *max);
-    printf("base = %d\n", *base);
-    printf("cnt rmd = %d\n", *count_removed);
-    printf("Pos\tRemoved");
-    for (int i = 0; i < *count_removed; i++) {
-      printf("%d\t%d\n", i, removed[i]);
-    }
-    printf("Pos\tListItem");
-    for (int i = 0; i < *max; i++) {
-      printf("%d\t%d\n", i, primes[i]);
-    }
-  } else if (BASE) {
-    printf("base = %d\n", *base);
-  }
 }
 
 void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
@@ -297,22 +233,6 @@ void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
   while(*base < *max)  {
     remove_multiples(primes, base, max, removed, count_removed);
 
-    if (DEBUG) {
-      printf("max = %d\n", *max);
-      printf("base = %d\n", *base);
-      printf("cnt rmd = %d\n", *count_removed);
-      printf("Pos\tRemoved");
-      for (int i = 0; i < *count_removed; i++) {
-        printf("%d\t%d\n", i, removed[i]);
-      }
-      printf("Pos\tListItem");
-      for (int i = 0; i < *max; i++) {
-        printf("%d\t%d\n", i, primes[i]);
-      }
-    } else if (BASE) {
-      printf("base = %d\n", *base);
-    }
-
     // send response to client
     if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
       perror("server: send_all()");
@@ -320,21 +240,6 @@ void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
 
     receive_removed(socket_fd, removed, primes, ack, base, primes_len); 
 
-    if (DEBUG) {
-      printf("max = %d\n", *max);
-      printf("base = %d\n", *base);
-      printf("cnt rmd = %d\n", *count_removed);
-      printf("Pos\tRemoved");
-      for (int i = 0; i < *count_removed; i++) {
-        printf("%d\t%d\n", i, removed[i]);
-      }
-      printf("Pos\tListItem");
-      for (int i = 0; i < *max; i++) {
-        printf("%d\t%d\n", i, primes[i]);
-      }
-    } else if (BASE) {
-      printf("base = %d\n", *base);
-    }
   }
 }
 
@@ -471,12 +376,6 @@ int main(int argc, char *argv[]) {
         // keep track of the counts removed and the removed items
         int *count_removed = (int *) calloc(1, sizeof(int));
         int *removed = (int *) calloc((*max + 1), sizeof(int));
-        
-        if (DEBUG) {
-          print_status(max, base, count_removed, removed, primes);
-        } else if (BASE) {
-          printf("base = %d\n", *base);
-        }
 
         char *ack = (char *) calloc(1, sizeof(char));
 
@@ -486,6 +385,7 @@ int main(int argc, char *argv[]) {
           calc_loop(socket_connection_fd, removed, primes, ack, base, max, count_removed, &primes_len);
         } else {
           while(*base < *max)  {
+
             remove_multiples(primes, base, max, removed, count_removed);
             primes_len -= *count_removed;
 
@@ -497,27 +397,6 @@ int main(int argc, char *argv[]) {
               }
             }
 
-            printf("Pos\tRemoved");
-            for (int i = 0; i < *count_removed; i++) {
-              printf("%d\t%d\n", i, removed[i]);
-            }
-
-            if (DEBUG) {
-              printf("max = %d\n", *max);
-              printf("base = %d\n", *base);
-              printf("cnt rmd = %d\n", *count_removed);
-              printf("Pos\tRemoved");
-              for (int i = 0; i < *count_removed; i++) {
-                printf("%d\t%d\n", i, removed[i]);
-              }
-              printf("Pos\tListItem");
-              for (int i = 0; i < *max; i++) {
-                printf("%d\t%d\n", i, primes[i]);
-              }
-            } else if (BASE) {
-              printf("base = %d\n", *base);
-            }
-
             (*base)++;
             while (*base < *max && primes[*base] == 0) {
               (*base)++;
@@ -526,16 +405,6 @@ int main(int argc, char *argv[]) {
             // send response to client
             if ((send_all(socket_connection_fd, removed, *count_removed, base)) == -1) {
               perror("server: send_all()");
-            }
-           
-            if (DEBUG) {
-              printf("BETWEENZEES");
-              printf("Pos\tRemoved");
-              for (int i = 0; i < *count_removed; i++) {
-                printf("%d\t%d\n", i, removed[i]);
-              }
-            } else if (BASE) {
-              printf("base = %d\n", *base);
             }
 
             receive_removed(socket_connection_fd, removed, primes, ack, base, &primes_len);
@@ -546,24 +415,6 @@ int main(int argc, char *argv[]) {
               if (primes[i] != 0) {
                 printf("%d, ", primes[i]);
               }
-            }
-
-            
-            if (DEBUG) {
-              printf("I ASSUME IT IS HERE");
-              printf("max = %d\n", *max);
-              printf("base = %d\n", *base);
-              printf("cnt rmd = %d\n", *count_removed);
-              printf("Pos\tRemoved");
-              for (int i = 0; i < *count_removed; i++) {
-                printf("%d\t%d\n", i, removed[i]);
-              }
-              printf("Pos\tListItem");
-              for (int i = 0; i < *max; i++) {
-                printf("%d\t%d\n", i, primes[i]);
-              }
-            } else if (BASE) {
-              printf("base = %d\n", *base);
             }
           }
         }
@@ -703,53 +554,14 @@ int main(int argc, char *argv[]) {
     } else {
       while(*base < *max) {
 
-        if (DEBUG) {
-          printf("\n\nBEGIN: Client start of loop\n");
-          printf("max = %d\n", *max);
-          printf("base = %d\n", *base);
-          printf("cnt rmd = %d\n", *count_removed);
-          printf("\n\nREMOVED THIS TIME:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *count_removed; i++) {
-            printf("%d\t%d\n", i, removed[i]);
-          }
-          printf("\n\nREMAINING PRIMES:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *max; i++) {
-            printf("%d\t%d\n", i, primes[i]);
-          }
-          printf("\nEND: Client start of loop\n\n");
-        } else if (BASE) {
-          printf("base = %d\n", *base);
-        }
-
         receive_removed(socket_fd, removed, primes, ack, base, &primes_len);
+
         printf("\n\nafter receive: primes_len : %d\n", primes_len);
         printf("REMAINING PRIMES:\n-----------------\n");
         for (int i = 0; i < *max; i++) {
           if (primes[i] != 0) {
             printf("%d, ", primes[i]);
           }
-        }
-
-        if (DEBUG) {
-          printf("\n\nBEGIN: Client between receive and remove mults\n");
-          printf("max = %d\n", *max);
-          printf("base = %d\n", *base);
-          printf("cnt rmd = %d\n", *count_removed);
-          printf("\n\nREMOVED THIS TIME:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *count_removed; i++) {
-            printf("%d\t%d\n", i, removed[i]);
-          }
-          printf("\n\nREMAINING PRIMES:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *max; i++) {
-            printf("%d\t%d\n", i, primes[i]);
-          }
-          printf("\nEND: Client between receive and remove mults\n\n");
-        } else if (BASE) {
-          printf("base = %d\n", *base);
         }
 
         remove_multiples(primes, base, max, removed, count_removed);
@@ -768,67 +580,15 @@ int main(int argc, char *argv[]) {
           (*base)++;
         }
 
-        if (DEBUG) {
-          printf("\n\nBEGIN: Client between remove mults and send\n");
-          printf("max = %d\n", *max);
-          printf("base = %d\n", *base);
-          printf("cnt rmd = %d\n", *count_removed);
-          printf("\n\nREMOVED THIS TIME:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *count_removed; i++) {
-            printf("%d\t%d\n", i, removed[i]);
-          }
-          printf("\n\nREMAINING PRIMES:\n-----------------\n");
-          printf("Pos\tPrime\n");
-          for (int i = 0; i < *max; i++) {
-            printf("%d\t%d\n", i, primes[i]);
-          }
-          printf("\nEND: Client between receive and remove mults\n\n");
-        } else if (BASE) {
-          printf("base = %d\n", *base);
-        }
-
-
         if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
           perror("server: send_all()");
         }
-        
-        if (DEBUG) {
-          printf("\n\nBEGIN: Client between send and receive\n");
-          printf("max = %d\n", *max);
-          printf("base = %d\n", *base);
-          printf("cnt rmd = %d\n", *count_removed);
-          printf("\n\nREMOVED THIS TIME:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *count_removed; i++) {
-            printf("%d\t%d\n", i, removed[i]);
-          }
-          printf("\n\nREMAINING PRIMES:\n-----------------\n");
-          printf("Pos\tRemoved\n");
-          for (int i = 0; i < *max; i++) {
-            printf("%d\t%d\n", i, primes[i]);
-          }
-          printf("\nEND: Client between receive and remove mults\n\n");
-        } else if (BASE) {
-          printf("base = %d\n", *base);
-        }
       }
 
-      char type[] = "client";
-      printf("DONEDONEODNE");
+      char type[] = "client: ";
       printf("primes_len: %d\n", primes_len);
-      printOut(type, primes, *max, 5);
-      /*
-      printf("\n\nREMAINING PRIMES:\n-----------------\n");
-      printf("Pos\tPrime\n");
-      for (int i = 0; i < *max; i++) {
-        if (primes[i] != 0) {
-          printf("%d\t%d\n", i, primes[i]);
-        }
-      }
-      */
+      printOut(type, primes, *max, primes_len);
     }
-
 
     return 0;
 
