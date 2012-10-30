@@ -81,14 +81,18 @@ void printOut(char* type, int *primes, int max, int primes_len){
   int num_printed = 0;
   for (int i = 0; i < first_primes_len; i++) {
     if (first_primes[i] != 0) {
-      printf(" %d,", first_primes[i]);
+      printf(" %d ", first_primes[i]);
     }
   }
   printf(" . . .");
   for (int i = 0; i < last_primes_len - 1; i++) {
-    printf(" %d,", last_primes[i]);
+    printf(" %d ", last_primes[i]);
   }
-  printf(" %d\n", last_primes[last_primes_len - 1]);
+  if (last_primes[last_primes_len - 1] > last_primes[last_primes_len - 2]) {
+    printf(" %d\n", last_primes[last_primes_len - 1]);
+  } else {
+    printf("\n");
+  }
 
   free(first_primes);
   free(last_primes);
@@ -139,19 +143,10 @@ int send_all(int socket_connection_fd, int *removed, int count_removed, int *bas
     bytes_remaining -= bytes_this_message;
   }
 
+  free(remove_buf);
+  free(net_info);
   // mirror the functionality of send, return -1 on failure, the total sent bytes on success
   return bytes_this_message == -1 ? bytes_this_message : bytes_sent;
-}
-
-
-
-/**
- * Calculates if all primes are done, if so returns false
- * 
- */
-int isNotDone(vector<int> primes, int start){
-  if (start == 0) return 1;
-  return ((primes.size()-1) == start);
 }
 
 /** 
@@ -187,6 +182,7 @@ void remove_multiples(int *primes, int *base, int *max, int *removed, int *remov
 
 /**
  * receives the array of removed items from the socket file descriptor
+ *  CALLER MUST FREE REMOVE AND BASE
  */
 void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *base, int *primes_len, int max) {
   char data_length_buffer[sizeof(int) * 2];
@@ -238,7 +234,7 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
 void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
         int *max, int *count_removed, int *primes_len) {
 
-  while(*base < *max)  {
+  while((*base) * (*base) < *max)  {
     remove_multiples(primes, base, max, removed, count_removed);
 
     // send response to client
@@ -249,6 +245,8 @@ void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
     receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max); 
 
   }
+  free(removed);
+  free(base);
 }
 
 int main(int argc, char *argv[]) {
@@ -572,6 +570,15 @@ int main(int argc, char *argv[]) {
       printOut(type, primes, *max, primes_len);
     }
 
+    free(max);
+    free(primes);
+    free(ack);
+    free(base);
+    
+    //free(net_info); //This free causes core dump
+    free(info_buf);
+    free(removed);
+    free(count_removed);
     return 0;
 
     // -------------------- CLIENT END -------------------- //
