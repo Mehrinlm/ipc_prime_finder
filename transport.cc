@@ -29,10 +29,6 @@
 
 using namespace std;
 
-void reap_all_dead_child_processes(int signal) {
-  while (waitpid(-1, NULL, WNOHANG) > 0);
-}
-
 /**
  *  Prints out what was just passed in in correc format
  */
@@ -181,7 +177,6 @@ void remove_multiples(int *primes, int *base, int *max, int *removed, int *remov
 
 /**
  * receives the array of removed items from the socket file descriptor
- *  CALLER MUST FREE REMOVE AND BASE
  */
 void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *base, int *primes_len, int max) {
   char data_length_buffer[sizeof(int) * 2];
@@ -228,25 +223,11 @@ void receive_removed(int socket_fd, int *removed, int *primes, char *ack, int *b
   *primes_len -= array_length;
   char type[] = "Result";
   printOut(type, removed, array_length, array_length);
+  //free(int_list); //Cuases core dump
+
+  
 }
 
-void calc_loop(int socket_fd, int *removed, int *primes, char *ack, int *base,
-        int *max, int *count_removed, int *primes_len) {
-
-  while((*base) * (*base) < *max)  {
-    remove_multiples(primes, base, max, removed, count_removed);
-
-    // send response to client
-    if ((send_all(socket_fd, removed, *count_removed, base)) == -1) {
-      perror("server: send_all()");
-    }
-      
-    receive_removed(socket_fd, removed, primes, ack, base, primes_len, *max); 
-
-  }
-  free(removed);
-  free(base);
-}
 
 int main(int argc, char *argv[]) {
   char server;
@@ -323,14 +304,6 @@ int main(int argc, char *argv[]) {
     if (listen(socket_listen_fd, MAX_IN_LISTEN_QUEUE) == -1) {
       perror("server: listen()");
       exit(1);
-    }
-
-    // setup signal handler for forked child processes
-    sa.sa_handler = reap_all_dead_child_processes;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART;                             // resume interruptable reads and writes on file descriptors
-    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
-      perror("server: sigaction() failed to set SIGCHLD handler");
     }
   
     // accept() connections loop
@@ -437,7 +410,15 @@ int main(int argc, char *argv[]) {
         waitpid(child_pid, &status, 0);
       }
       */
+    free(max_buf);
+    free(max);
+    free(primes);
+    free(ack);
+    free(base);
     
+    free(removed);
+    free(count_removed);
+      
 
     return 0;
 
@@ -542,10 +523,6 @@ int main(int argc, char *argv[]) {
     }
 
 
-    if (INTEGRATED) {
-      receive_removed(socket_fd, int_list, primes, ack, base, &primes_len, *max);
-      calc_loop(socket_fd, removed, primes, ack, base, max, count_removed, &primes_len);
-    } else {
       while((*base) * (*base) < *max) {
 
         receive_removed(socket_fd, removed, primes, ack, base, &primes_len, *max);
@@ -568,7 +545,7 @@ int main(int argc, char *argv[]) {
       char type[] = "FINAL: ";
 
       printOut(type, primes, *max, primes_len);
-    }
+    
 
     free(max);
     free(primes);
